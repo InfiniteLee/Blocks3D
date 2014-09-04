@@ -1,0 +1,26 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Blocks3D - Multiplayer Voxel Painter</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <style>
+            body {
+                font-family: Monospace;
+                background-color: #f0f0f0;
+                margin: 0px;
+                overflow: hidden;
+            }
+
+            #oldie { background-color: #ddd !important }
+        </style>
+    </head>
+    <body>
+        <!-- socket.io and jquery dont load easily with require.js, so including it here for brevity -->
+        <script src="https://cdn.socket.io/socket.io-1.0.6.js"></script>
+        <script src="//code.jquery.com/jquery-2.1.1.min.js"></script>
+
+        <script data-main="js/main" src="js/lib/require.js"></script>
+    </body>
+</html>
