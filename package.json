@@ -1,0 +1,11 @@
+{
+  "name": "Blocks3D",
+  "description": "A networked voxel painting app.",
+  "author": "Kevin Lee <kevin@infinite-lee.com>",
+  "dependencies": {
+    "connect": "3.x.x",
+    "serve-static": "1.5.x",
+    "socket.io": "1.x.x"
+  },
+  "engine": "node >= 0.10.31"
+}

@@ -1,64 +1,61 @@
-var World = (function () {
+var World = function () {
 
-	var voxelMap = {};
+    var voxelMap = {};
 
-	var helperMap = {};
+    var helperMap = {};
 
-	function attachScene(scene) {
+    function addVoxel(voxel, position, color) {
 
-	};
-
-	function addVoxel(voxel, position, color) {
-		var key = createKey(position);
-		if (voxelMap.hasOwnProperty[key]) {
-			return false;
-		}
+        var key = createKey(position);
+        if (voxelMap.hasOwnProperty[key]) {
+            return false;
+        }
 
         voxelMap[key] = {
-        	voxel: voxel,
-        	position: position,
-        	color: color
+            voxel: voxel,
+            position: position,
+            color: color
         };
 
         return true;
-	}
+    }
 
-	function getVoxel(key) {
-		if (voxelMap.hasOwnProperty(key)) {
+    function getVoxel(key) {
+        if (voxelMap.hasOwnProperty(key)) {
             return voxelMap[key].voxel;
         } else {
-        	return null;
+            return null;
         }
-	}
+    }
 
-	function removeVoxel(key) {
-		if (voxelMap.hasOwnProperty(key)) {
+    function removeVoxel(key) {
+        if (voxelMap.hasOwnProperty(key)) {
             delete voxelMap[key];
             return true;
         }
         return false;
-	}
+    }
 
-	function createKey(position) {
+    function createKey(position) {
         return position.x + '_' + position.y + '_' + position.z;
     }
 
     function hasVoxel(position) {
-    	var key = createKey(position);
-    	if (voxelMap.hasOwnProperty(key)) {
-    		return true;
-    	}
-    	return false;
+        var key = createKey(position);
+        if (voxelMap.hasOwnProperty(key)) {
+            return true;
+        }
+        return false;
     }
 
     function getWorld() {
-    	return Object.keys(voxelMap).map(function (key) {
-    		return {color: voxelMap[key].color, position: voxelMap[key].position};
-    	});
+        return Object.keys(voxelMap).map(function (key) {
+            return {color: voxelMap[key].color, position: voxelMap[key].position};
+        });
     }
 
     function addHelper(id, helper) {
-    	if (!helperMap.hasOwnProperty(id)) {
+        if (!helperMap.hasOwnProperty(id)) {
             helperMap[id] = helper;
             return true;
         }
@@ -66,34 +63,40 @@ var World = (function () {
     }
 
     function getHelper(id) {
-    	if (helperMap.hasOwnProperty(id)) {
+        if (helperMap.hasOwnProperty(id)) {
             return helperMap[id];
         }
         return null;
     }
 
     function removeHelper(id) {
-    	if (helperMap.hasOwnProperty(id)) {
+        if (helperMap.hasOwnProperty(id)) {
             delete helperMap[id];
             return true;
         }
         return false;
     }
 
-	return {
-		addVoxel: addVoxel,
-		getVoxel: getVoxel,
-		removeVoxel: removeVoxel,
-		createKey: createKey,
-		getWorld: getWorld,
-		addHelper: addHelper,
-		getHelper: getHelper,
-		removeHelper: removeHelper
-	}
+    function destroyWorld() {
+        voxelMap = {};
+        helperMap = {};
+    }
 
-})();
+    return {
+        addVoxel: addVoxel,
+        getVoxel: getVoxel,
+        removeVoxel: removeVoxel,
+        createKey: createKey,
+        getWorld: getWorld,
+        addHelper: addHelper,
+        getHelper: getHelper,
+        removeHelper: removeHelper,
+        destroyWorld: destroyWorld
+    };
+
+};
 
 //export for node.js
 if (typeof exports !== 'undefined') {
-	module.exports = World;
+    module.exports = World;
 }

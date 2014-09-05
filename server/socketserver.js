@@ -1,33 +1,35 @@
+var MAX_ROOMS = 4;
+
+var rooms = [];
+
 var io = require('socket.io').listen(1337);
 
-var World = require('../shared/js/World.js');
-
 io.on('connection', function (socket) {
-	console.log('connect: ' + socket.id);
-	var world = World.getWorld();
-	socket.emit('connection_info', {id: socket.id, world:world})
+    console.log('connect: ' + socket.id);
 
-	socket.on('add_voxel', function (data) {
-		if(World.addVoxel(null, data.position, data.color)) {
-			io.emit('add_voxel', data);
-		}
-	});
+    var room;
+    if(rooms.length < MAX_ROOMS) {
+        room = createRoom(rooms.length);
+        rooms.push(room);
+    } else {
+        room = rooms[Math.floor(Math.random() * rooms.length)];
+    }
 
-	socket.on('remove_voxel', function (data) {
-		if(World.removeVoxel(data.position)) {
-			io.emit('remove_voxel', data);
-		}
-	});
+    room.join(socket);
 
-	socket.on('helper_update', function (data) {
-		data.id = socket.id;
-		io.emit('helper_update', data);
-	});
+    socket.on('switch_room', function (data) {
+        rooms[data.roomId].leave(socket);
 
-	socket.on('disconnect', function () {
-	console.log('disconnect: ' + socket.id);
-	io.emit('disconnect', {id: socket.id});
+        if(rooms.length < MAX_ROOMS) {
+            room = createRoom(rooms.length);          
+            rooms.push(room);
+            room.join(socket);
+        } else {
+            rooms[(data.roomId + 1) % MAX_ROOMS].join(socket);
+        }
+    });
 });
 
-});
-
+function createRoom(roomId) {
+    return require('./js/Room.js')(io, roomId);
+}

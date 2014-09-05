@@ -31,7 +31,11 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
     var socket, socketId;
 
-    var colorList, color;
+    var roomId;
+
+    var myWorld = World();
+
+    var colorList, color, colorIndex;
 
     var helpers;
 
@@ -50,7 +54,10 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         info.style.top = '10px';
         info.style.width = '100%';
         info.style.textAlign = 'center';
-        info.innerHTML = 'Blocks 3D - Multiplayer Voxel Painter<br>based on: <a href="http://threejs.org" target="_blank">three.js</a> - voxel painter - webgl<br><strong>click</strong>: add voxel, <strong>shift + click</strong>: remove voxel, <strong>control</strong>: rotate';
+        info.innerHTML = 'Blocks 3D - Multiplayer Voxel Painter<br>based on: <a href="http://threejs.org" target="_blank">three.js</a> - voxel painter - webgl';
+        info.innerHTML += '<br><strong>click</strong>: add voxel, <strong>shift + click</strong>: remove voxel, <strong>control</strong>: rotate<br>';
+        info.innerHTML += '<button type="button" id="switchRoom">Switch Room </button>';
+        info.innerHTML += '<button type="button" id="changeColor">Change Color </button>';
         container.appendChild( info );
 
         camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
@@ -59,16 +66,70 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         scene = new THREE.Scene();
 
         // roll-over helpers
-        
-        var index = Math.floor((Math.random() * colorList.length));
-        color = colorList[index];
+
+        colorIndex = Math.floor((Math.random() * colorList.length));
+        color = colorList[colorIndex];
 
         rollOverMesh = VoxelFactory.createHelperVoxel(color);
-        scene.add( rollOverMesh );
 
         // picking
 
         projector = new THREE.Projector();
+
+        
+        mouse2D = new THREE.Vector3( 0, 10000, 0.5 );
+
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setClearColor( 0xf0f0f0 );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        container.appendChild( renderer.domElement );
+
+        stats = new Stats();
+        stats.domElement.style.position = 'absolute';
+        stats.domElement.style.top = '0px';
+        container.appendChild( stats.domElement );
+
+        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+        document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+        document.addEventListener( 'keydown', onDocumentKeyDown, false );
+        document.addEventListener( 'keyup', onDocumentKeyUp, false );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        socket = io('http://localhost:1337');
+
+        createSocketListeners();
+
+        setInterval(function () {
+            socket.emit('helper_update', {position:voxelPosition, color:color});
+        }, 1000);
+
+        $("#switchRoom").click(switchRoom);
+        $("#changeColor").click(changeColor);
+    }
+
+    function createSocketListeners() {
+
+        socket.on('connection_info', onConnectionInfo)
+        socket.on('add_voxel', onAddVoxel);
+        socket.on('remove_voxel', onRemoveVoxel);
+        socket.on('helper_update', onHelperUpdate);
+        socket.on('disconnect', onDisconnect);
+    }
+
+    function initScene() {
+
+        scene.add( rollOverMesh );
+
+        // Lights
+
+        var ambientLight = new THREE.AmbientLight( 0x606060 );
+        scene.add( ambientLight );
+
+        var directionalLight = new THREE.DirectionalLight( 0xffffff );
+        directionalLight.position.set( 1, 0.75, 0.5 ).normalize();
+        scene.add( directionalLight );
 
         // grid
 
@@ -98,54 +159,14 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         scene.add( plane );
 
         objects.push( plane );
-
-        mouse2D = new THREE.Vector3( 0, 10000, 0.5 );
-
-        // Lights
-
-        var ambientLight = new THREE.AmbientLight( 0x606060 );
-        scene.add( ambientLight );
-
-        var directionalLight = new THREE.DirectionalLight( 0xffffff );
-        directionalLight.position.set( 1, 0.75, 0.5 ).normalize();
-        scene.add( directionalLight );
-
-        renderer = new THREE.WebGLRenderer( { antialias: true } );
-        renderer.setClearColor( 0xf0f0f0 );
-        renderer.setSize( window.innerWidth, window.innerHeight );
-
-        container.appendChild( renderer.domElement );
-
-        stats = new Stats();
-        stats.domElement.style.position = 'absolute';
-        stats.domElement.style.top = '0px';
-        container.appendChild( stats.domElement );
-
-        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
-        document.addEventListener( 'mousedown', onDocumentMouseDown, false );
-        document.addEventListener( 'keydown', onDocumentKeyDown, false );
-        document.addEventListener( 'keyup', onDocumentKeyUp, false );
-
-        //
-
-        window.addEventListener( 'resize', onWindowResize, false );
-
-        socket = io('http://localhost:1337');
-
-        createSocketListeners();
-
-        setInterval(function () {
-            socket.emit('helper_update', {position:voxelPosition, color:color});
-        }, 1000);
     }
 
-    function createSocketListeners() {
-
-        socket.on('connection_info', onConnectionInfo)
-        socket.on('add_voxel', onAddVoxel);
-        socket.on('remove_voxel', onRemoveVoxel);
-        socket.on('helper_update', onHelperUpdate);
-        socket.on('disconnect', onDisconnect)
+    function destroyScene() {
+        objects = [];
+        var toRemove = scene.children.slice(0);
+        toRemove.forEach(function (child) {
+            scene.remove(child);
+        });
     }
 
     function onWindowResize() {
@@ -193,6 +214,21 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
     }
 
+    function switchRoom() {
+        myWorld.destroyWorld();
+        destroyScene();
+
+        socket.emit('switch_room', {roomId:roomId});
+    }
+
+    function changeColor() {
+        colorIndex = (colorIndex + 1) % colorList.length;
+        scene.remove(rollOverMesh);
+        color = colorList[colorIndex];
+        rollOverMesh = VoxelFactory.createHelperVoxel(color);
+        scene.add(rollOverMesh);
+    }
+
     function onDocumentMouseMove( event ) {
 
         event.preventDefault();
@@ -215,7 +251,7 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
             if ( isShiftDown ) {
                 if ( intersector.object != plane ) {
                     var position = intersector.object.position;
-                    var key = World.createKey(position);
+                    var key = myWorld.createKey(position);
                     socket.emit('remove_voxel', {key:key});
                 }
 
@@ -230,6 +266,10 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
     function onConnectionInfo(data) {
         socketId = data.id;
+
+        roomId = data.roomId;
+
+        initScene();
 
         data.world.forEach(function (voxel) {
             addVoxel(voxel.color, voxel.position);
@@ -246,18 +286,18 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         scene.add( voxel );
         objects.push(voxel);
 
-        World.addVoxel(voxel, position, color);
+        myWorld.addVoxel(voxel, position, color);
         //TODO: add voxel immediately and handle if server says otherwise later
     }
 
     function onRemoveVoxel(data) {
 
-        var voxel = World.getVoxel(data.key);
+        var voxel = myWorld.getVoxel(data.key);
 
         if (voxel) {
             scene.remove( voxel );
             objects.splice( objects.indexOf( voxel ), 1 );
-            World.removeVoxel(data.key);
+            myWorld.removeVoxel(data.key);
         }  
     }
 
@@ -267,11 +307,11 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
             return;
         }
 
-        var helper = World.getHelper(data.id);
+        var helper = myWorld.getHelper(data.id);
         if (!helper) {
             helper = VoxelFactory.createHelperVoxel(data.color);
             helper.matrixAutoUpdate = false;
-            World.addHelper(data.id, helper);
+            myWorld.addHelper(data.id, helper);
 
             scene.add(helper);
         }
@@ -282,16 +322,20 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
     }
 
     function onDisconnect(data) {
-        var helper = World.getHelper(data.id);
+        if (data == "transport error") {
+            destroyScene();
+        }
+
+        var helper = myWorld.getHelper(data.id);
         if (helper) {
             scene.remove(helper);
-            World.removeHelper(data.id);
+            myWorld.removeHelper(data.id);
         }
     }
 
-    function onDocumentKeyDown( event ) {
+    function onDocumentKeyDown(event) {
 
-        switch( event.keyCode ) {
+        switch (event.keyCode) {
 
             case 16: isShiftDown = true; break;
             case 17: isCtrlDown = true; break;
@@ -300,9 +344,9 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
     }
 
-    function onDocumentKeyUp( event ) {
+    function onDocumentKeyUp(event) {
 
-        switch ( event.keyCode ) {
+        switch (event.keyCode) {
 
             case 16: isShiftDown = false; break;
             case 17: isCtrlDown = false; break;
