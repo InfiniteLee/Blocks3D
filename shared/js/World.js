@@ -1,3 +1,11 @@
+/**
+ * @author Kevin Lee
+ *
+ * Module that represents a World. It keeps references to all voxels for easy search
+ * and removal. It is designed to be used by both the client and the server for
+ * maximum parity. 
+ */
+
 var World = function () {
 
     var voxelMap = {};
@@ -23,6 +31,14 @@ var World = function () {
     function getVoxel(key) {
         if (voxelMap.hasOwnProperty(key)) {
             return voxelMap[key].voxel;
+        } else {
+            return null;
+        }
+    }
+
+    function getVoxelColor(key) {
+        if (voxelMap.hasOwnProperty(key)) {
+            return voxelMap[key].color;
         } else {
             return null;
         }
@@ -85,6 +101,8 @@ var World = function () {
     return {
         addVoxel: addVoxel,
         getVoxel: getVoxel,
+        hasVoxel: hasVoxel,
+        getVoxelColor: getVoxelColor,
         removeVoxel: removeVoxel,
         createKey: createKey,
         getWorld: getWorld,

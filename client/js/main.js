@@ -1,9 +1,22 @@
+/**
+ * @author Kevin Lee
+ *
+ * The main module. A lot of this is taken from the three.js voxelpainter example.
+ * It is heavily modified to support the multiplayer aspects, but the rendering
+ * code and logic is largely untouched.
+ */
+
+var SOCKET_HOST = 'http://localhost:1337';
+
 requirejs.config({
     baseUrl: 'js/lib',
     shim: {
         'app/VoxelFactory': {
             deps:['three.min']
         },
+        'app/HelperFactory': {
+            deps:['app/VoxelFactory']
+        }
     },
     paths: {
         app: '../app',
@@ -11,7 +24,7 @@ requirejs.config({
     }
 });
 
-require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/World'], function() {
+require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'app/HelperFactory', 'shared/World'], function() {
 
     if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
@@ -38,6 +51,9 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
     var colorList, color, colorIndex;
 
     var helpers;
+
+    var voxelFactory = VoxelFactory();
+    var helperFactory = HelperFactory();
 
     $.getJSON('colors.json', function (data) {
         colorList = data;
@@ -70,7 +86,7 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         colorIndex = Math.floor((Math.random() * colorList.length));
         color = colorList[colorIndex];
 
-        rollOverMesh = VoxelFactory.createHelperVoxel(color);
+        rollOverMesh = helperFactory.createVoxel(color);
 
         // picking
 
@@ -97,12 +113,14 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
         window.addEventListener( 'resize', onWindowResize, false );
 
-        socket = io('http://localhost:1337');
+        socket = io(SOCKET_HOST);
 
         createSocketListeners();
 
         setInterval(function () {
-            socket.emit('helper_update', {position:voxelPosition, color:color});
+            if (typeof voxelPosition !== 'undefined') {
+                socket.emit('helper_update', {position:voxelPosition, color:color});
+            }
         }, 1000);
 
         $("#switchRoom").click(switchRoom);
@@ -110,11 +128,9 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
     }
 
     function createSocketListeners() {
-
         socket.on('connection_info', onConnectionInfo)
-        socket.on('add_voxel', onAddVoxel);
-        socket.on('remove_voxel', onRemoveVoxel);
         socket.on('helper_update', onHelperUpdate);
+        socket.on('update', onUpdate);
         socket.on('disconnect', onDisconnect);
     }
 
@@ -169,14 +185,7 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         });
     }
 
-    function onWindowResize() {
-
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-
-        renderer.setSize( window.innerWidth, window.innerHeight );
-
-    }
+    // HELPERS
 
     function getRealIntersector( intersects ) {
 
@@ -193,15 +202,12 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         }
 
         return null;
-
     }
 
     function setVoxelPosition( intersector ) {
 
         if ( intersector.face === null ) {
-
             console.log( intersector )
-
         }
 
         normalMatrix.getNormalMatrix( intersector.object.matrixWorld );
@@ -211,7 +217,6 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
         voxelPosition.addVectors( intersector.point, tmpVec );
         voxelPosition.divideScalar( 50 ).floor().multiplyScalar( 50 ).addScalar( 25 );
-
     }
 
     function switchRoom() {
@@ -225,17 +230,24 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         colorIndex = (colorIndex + 1) % colorList.length;
         scene.remove(rollOverMesh);
         color = colorList[colorIndex];
-        rollOverMesh = VoxelFactory.createHelperVoxel(color);
+        rollOverMesh = helperFactory.createVoxel(color);
         scene.add(rollOverMesh);
     }
 
-    function onDocumentMouseMove( event ) {
+    // EVENT LISTENERS
 
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    function onDocumentMouseMove( event ) {
         event.preventDefault();
 
         mouse2D.x = ( event.clientX / window.innerWidth ) * 2 - 1;
         mouse2D.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-
     }
 
     function onDocumentMouseDown( event ) {
@@ -253,16 +265,40 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
                     var position = intersector.object.position;
                     var key = myWorld.createKey(position);
                     socket.emit('remove_voxel', {key:key});
+                    removeVoxel(key);
                 }
 
             // create cube
             } else {
                 intersector = getRealIntersector( intersects );
                 setVoxelPosition( intersector );
-                socket.emit('add_voxel', {position:voxelPosition, color:color});
+                socket.emit('add_voxel', {color:color, position:voxelPosition});
+                addVoxel(color, voxelPosition);
             }
         }
     }
+
+    function onDocumentKeyDown(event) {
+
+        switch (event.keyCode) {
+
+            case 16: isShiftDown = true; break;
+            case 17: isCtrlDown = true; break;
+
+        }
+    }
+
+    function onDocumentKeyUp(event) {
+
+        switch (event.keyCode) {
+
+            case 16: isShiftDown = false; break;
+            case 17: isCtrlDown = false; break;
+
+        }
+    }
+
+    // SOCKET LISTENERS
 
     function onConnectionInfo(data) {
         socketId = data.id;
@@ -276,31 +312,6 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         });
     }
 
-    function onAddVoxel(data) {
-        addVoxel(data.color, data.position);
-    }
-
-    function addVoxel(color, position) {
-        var voxel = VoxelFactory.createVoxel(color, position);
-
-        scene.add( voxel );
-        objects.push(voxel);
-
-        myWorld.addVoxel(voxel, position, color);
-        //TODO: add voxel immediately and handle if server says otherwise later
-    }
-
-    function onRemoveVoxel(data) {
-
-        var voxel = myWorld.getVoxel(data.key);
-
-        if (voxel) {
-            scene.remove( voxel );
-            objects.splice( objects.indexOf( voxel ), 1 );
-            myWorld.removeVoxel(data.key);
-        }  
-    }
-
     function onHelperUpdate(data) {
 
         if (data.id === socketId) {
@@ -309,7 +320,7 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
 
         var helper = myWorld.getHelper(data.id);
         if (!helper) {
-            helper = VoxelFactory.createHelperVoxel(data.color);
+            helper = helperFactory.createVoxel(data.color);
             helper.matrixAutoUpdate = false;
             myWorld.addHelper(data.id, helper);
 
@@ -319,6 +330,65 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         helper.position.copy( data.position );
         helper.updateMatrix();
         
+    }
+
+    function onUpdate(actions) {
+        console.log(actions);
+        actions.sort(sortActions);
+
+        actions.forEach(processAction);
+    }
+
+    function processAction(action) {
+        switch(action[0])
+        {
+            case "add_voxel":
+                addVoxel(action[2], action[3]);
+                break;
+            case "remove_voxel":
+                removeVoxel(action[2]);
+                break;
+        }
+    }
+
+    function sortActions(a, b) {
+        if (a[1] < b[1]) {
+            return -1;
+        }
+
+        if (a[1] > b[1]) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    function addVoxel(color, position) {
+        if (myWorld.hasVoxel(position)) {
+            var key = myWorld.createKey(position);
+            if (myWorld.getVoxelColor(key) != color) {
+                removeVoxel(key);
+            }
+            return;
+        }
+
+        var voxel = voxelFactory.createVoxel(color, position);
+
+        scene.add( voxel );
+        objects.push(voxel);
+
+        myWorld.addVoxel(voxel, position, color);
+    }
+
+    function removeVoxel(key) {
+        console.log(key);
+        var voxel = myWorld.getVoxel(key);
+        console.log(voxel);
+        if (voxel) {
+            scene.remove( voxel );
+            objects.splice( objects.indexOf( voxel ), 1 );
+            myWorld.removeVoxel(key);
+        }  
     }
 
     function onDisconnect(data) {
@@ -333,27 +403,7 @@ require(['three.min', 'stats.min', 'app/Detector', 'app/VoxelFactory', 'shared/W
         }
     }
 
-    function onDocumentKeyDown(event) {
-
-        switch (event.keyCode) {
-
-            case 16: isShiftDown = true; break;
-            case 17: isCtrlDown = true; break;
-
-        }
-
-    }
-
-    function onDocumentKeyUp(event) {
-
-        switch (event.keyCode) {
-
-            case 16: isShiftDown = false; break;
-            case 17: isCtrlDown = false; break;
-
-        }
-
-    }
+    // RENDER LOOP
 
     function animate() {
 

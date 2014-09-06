@@ -1,19 +1,21 @@
-var VoxelFactory = (function () {
+/**
+ * @author Kevin Lee
+ *
+ * A factory that creates Voxels.
+ */
+
+var VoxelFactory = function () {
 
     var cubeMaterials = {};
-    var helperCubeMaterials = {};
-
+    
     var cubeGeo = new THREE.BoxGeometry( 50, 50, 50 );
-
-    var rollOverGeo = new THREE.BoxGeometry( 50, 50, 50 );
-
+    
     function createVoxel(color, position) {
-        if (!cubeMaterials.hasOwnProperty(color)) {
-            var parsedColor = parseInt(color);
-            cubeMaterials[color] = new THREE.MeshLambertMaterial( { color: parsedColor, ambient: 0xFFFFFF, shading: THREE.FlatShading } );
+        if (!hasMaterial(color)) {
+            createNewMaterial(color);
         }
 
-        var voxel = new THREE.Mesh( cubeGeo, cubeMaterials[color] );
+        var voxel = createNewMesh(color);
 
         voxel.position.copy( position );
         voxel.matrixAutoUpdate = false;
@@ -22,19 +24,24 @@ var VoxelFactory = (function () {
         return voxel;
     };
 
-    function createHelperVoxel(color) {
-        if (!helperCubeMaterials.hasOwnProperty(color)) {
-            var parsedColor = parseInt(color);
-            helperCubeMaterials[color] = new THREE.MeshBasicMaterial( { color: parsedColor, opacity: 0.25, transparent: true } );
-        }
+    function hasMaterial(color) {
+        return cubeMaterials.hasOwnProperty(color);
+    }
 
-        return new THREE.Mesh( rollOverGeo, helperCubeMaterials[color] );
-    };
+    function createNewMaterial(color) {
+        var parsedColor = parseInt(color);
+        cubeMaterials[color] = new THREE.MeshLambertMaterial( { color: parsedColor, ambient: 0xFFFFFF, shading: THREE.FlatShading } );
+    }
 
+    function createNewMesh(color) {
+        return new THREE.Mesh( cubeGeo, cubeMaterials[color] );
+    }
 
     return {
-        createVoxel : createVoxel,
-        createHelperVoxel : createHelperVoxel
+        _hasMaterial: hasMaterial,
+        _cubeMaterials: cubeMaterials,
+        _createNewMesh: createNewMesh,
+        createVoxel: createVoxel
     };
 
-})();
+};

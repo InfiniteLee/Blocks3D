@@ -1,7 +1,21 @@
+/**
+ * @author Kevin Lee
+ *
+ * Module that represents a room. A room maintains listeners for the specific users
+ * who have joined that room. It also contains an instance of a world that is shared
+ * between all users in that room. It stores actions in an updates array that it will
+ * broadcast to all cients on an interval.
+ */
+
 module.exports = function(io, roomId) {
+
+    var TICK_RATE = 30;
+
     var world = require('../../shared/js/World.js')();
 
     var users = [];
+
+    var updates = [];
 
     function addVoxel(position, color) {
         return world.addVoxel(null, position, color);
@@ -26,13 +40,13 @@ module.exports = function(io, roomId) {
 
         socket.on('add_voxel', function (data) {
             if(addVoxel(data.position, data.color)) {
-                io.to(roomId).emit('add_voxel', data);
+                updates.push(['add_voxel', Date.now(), data.color, data.position]);
             }
         });
 
         socket.on('remove_voxel', function (data) {
             if(removeVoxel(data.key)) {
-                io.to(roomId).emit('remove_voxel', data);
+                updates.push(['remove_voxel', Date.now(), data.key]);
             }
         });
 
@@ -74,6 +88,13 @@ module.exports = function(io, roomId) {
         socket.removeAllListeners('helper_update');
         socket.removeAllListeners('disconnect');
     }
+
+    setInterval(function () {
+        if (updates.length > 0) {
+            io.to(roomId).emit('update', updates);
+            updates = [];
+        }
+    }, TICK_RATE);
 
     return {
         join: join,

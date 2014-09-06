@@ -1,3 +1,12 @@
+/**
+ * @author Kevin Lee
+ *
+ * This is the main socket server. It creates rooms and tracks them. It also
+ * handles the connection and joining/leaving of rooms for users. Ideally
+ * this can be scaled out horizontally using the Node.js Cluster module, and 
+ * assigning a certrain number of rooms per worker.
+ */
+
 var MAX_ROOMS = 4;
 
 var rooms = [];
